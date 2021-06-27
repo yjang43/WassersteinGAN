@@ -22,6 +22,15 @@ def get_args():
                         type=int,
                         help='resolution of a dataset to be used',
                         default=32,)
+    parser.add_argument('--calsses_to_include',
+                        type=int,
+                        nargs='+',
+                        help='classes of dataset to include',
+                        default=[0],)
+    parser.add_argument('--batch_size',
+                        type=int,
+                        help='number of batches per iteration',
+                        default=4,)
     args = parser.parse_args()
     
     return args
@@ -34,8 +43,7 @@ def get_sampler(dataset, classes=[0]):
     mask = torch.zeros_like(targets)
     for c in classes:
         mask += targets==c
-    target_idx = mask.nonzero()
-    
+    target_idx = mask.nonzero().flatten().tolist()    
     sampler = torch.utils.data.sampler.SubsetRandomSampler(target_idx)
     
     return sampler
@@ -46,12 +54,27 @@ def get_transforms(args):
     data_transforms = transforms.Compose([
         transforms.ToTensor(),
         transforms.Resize(args.resolution),
-        transforms.CenterCrop(args.resolution)
+        transforms.CenterCrop(args.resolution),
+        transforms.Normalize(0, 1)
     ])
     
     return data_transforms
 
 
+def get_dataloader(args, train=True):
+    dataset_classes = [ds for ds in dir(torchvision.datasets) 
+                       if ds.lower() == args.dataset_name.lower()]
+    assert dataset_classes, f'Dataset name {args.dataset_name} does not exist'
+    dataset_class = getattr(torchvision.datasets, dataset_classes[0])
+    dataset = dataset_class(root=args.data_root, train=train, download=False, transform=get_transforms(args))
+    dataloader = DataLoader(
+        dataset, 
+        batch_size=args.batch_size,
+        sampler=get_sampler(dataset, args.classes_to_include),
+        drop_last=True,
+    )
+    
+    return dataloader
 
 
 if __name__ == '__main__':
