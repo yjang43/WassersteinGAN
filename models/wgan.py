@@ -1,4 +1,4 @@
-# DCGAN
+# WGAN
 import math
 import torch
 import torch.nn as nn
@@ -10,7 +10,7 @@ def weights_init(m):
     if classname == 'ConvTranspose2d' or classname == 'Conv2d':
         nn.init.normal_(m.weight.data, 0.0, 0.02)
     elif classname == 'BatchNorm2d':
-        nn.init.normal_(m.weight.data, 1.0, 0.02)
+        nn.init.normal_(m.weight.data, 0.0, 0.02)
         nn.init.constant_(m.bias.data, 0)
 
 class ConvBlock(nn.Module):
@@ -23,7 +23,7 @@ class ConvBlock(nn.Module):
         elif normalization is None: self.norm = nn.Sequential()
         
         if activation == 'leaky_relu': self.actv = nn.LeakyReLU(0.2)
-        elif activation == 'sigmoid': self.actv = nn.Sigmoid()
+        elif activation is None: self.actv = nn.Sequential()
     
     def forward(self, x):
         out = self.conv(x)
@@ -32,9 +32,9 @@ class ConvBlock(nn.Module):
         return out
 
     
-class DCGANDiscriminator(nn.Module):
+class WGANDiscriminator(nn.Module):
     def __init__(self, args):
-        super(DCGANDiscriminator, self).__init__()
+        super(WGANDiscriminator, self).__init__()
         depth = int(math.log2(args.resolution)) -1
 
         net = [ConvBlock(
@@ -68,7 +68,6 @@ class DCGANDiscriminator(nn.Module):
                 'stride': 1,
                 'padding': 0
             },
-            activation='sigmoid',
             normalization=None
         ))
         self.net = nn.Sequential(*net)
@@ -99,9 +98,9 @@ class ConvTransposeBlock(nn.Module):
     
     
 
-class DCGANGenerator(nn.Module):
+class WGANGenerator(nn.Module):
     def __init__(self, args):
-        super(DCGANGenerator, self).__init__()
+        super(WGANGenerator, self).__init__()
         depth = int(math.log2(args.resolution)) -1
         
         mult = 2 ** (depth - 2)
@@ -144,42 +143,44 @@ class DCGANGenerator(nn.Module):
         return self.net(x)
 
 
-class DCGANLoss(nn.Module):
+class WGANLoss(nn.Module):
     def __init__(self, args):
-        super(DCGANLoss, self).__init__()
+        super(WGANLoss, self).__init__()
         self.device = args.device
-        self.bce = nn.BCELoss()
         
     def forward(self, x, mode='discriminator_loss'):
         if mode == 'discriminator_loss':
             fake_pred, real_pred = x
-            real_loss = self.bce(real_pred, torch.tensor(1.0).expand_as(real_pred).to(self.device))
-            fake_loss = self.bce(fake_pred, torch.tensor(0.0).expand_as(fake_pred).to(self.device))
-            loss = (real_loss + fake_loss) * 0.5
+            # maximize Wasserstein Distance
+            loss = -real_pred.mean(0) + fake_pred.mean(0)
             
         elif mode == 'generator_loss':
             fake_pred, _ = x
-            loss = self.bce(fake_pred, torch.tensor(1.0).expand_as(fake_pred).to(self.device))
+            # minimize Wasserstein Distance
+            loss = -fake_pred.mean(0)
         
         return loss
     
-class DCGANOptimizer(optim.Adam):
+class WGANOptimizer(optim.RMSprop):
     def __init__(self, args, params):
         self.args = args
         self.params = params
         
-        super(DCGANOptimizer, self).__init__(
+        super(WGANOptimizer, self).__init__(
             params,
             lr=args.lr,
         )
 
     def step(self):
-        loss = super(DCGANOptimizer, self).step()
+        loss = super(WGANOptimizer, self).step()
+        # clipping weights
+        for p in self.params:
+            p.data.clamp_(args)
         return loss
 
 components = {
-    'generator': DCGANGenerator,
-    'discriminator': DCGANDiscriminator,
-    'criterion': DCGANLoss,
-    'optimizer': DCGANOptimizer
+    'generator': WGANGenerator,
+    'discriminator': WGANDiscriminator,
+    'criterion': WGANLoss,
+    'optimizer': WGANOptimizer
 }

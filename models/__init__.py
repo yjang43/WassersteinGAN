@@ -1,1 +1,1 @@
-from . import dcgan
+from . import dcgan, wgan
