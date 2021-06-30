@@ -19,3 +19,15 @@ pip install -r requirements.txt
 ```
 
 ### Usage
+
+### Reference
+__GAN__
+
+
+
+__Inception Score v3__
+
+https://github.com/sbarratt/inception-score-pytorch/blob/master/inception_score.py
+
+__FID__
+
