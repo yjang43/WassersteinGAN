@@ -66,7 +66,7 @@ def get_args():
     parser.add_argument('--evaluation_size',
                         type=int,
                         help='The number of data to evaluate image quality on',
-                        default=1024)
+                        default=100)
     parser.add_argument('--device',
                         type=str,
                         help='Device to use in training',
@@ -179,11 +179,11 @@ def train(generator, discriminator, criterion, optimizer_g, optimizer_d,
         wandb.log({'generator loss': loss_g.item(),
                    'discriminator loss': loss_d.item()})
         
-        pbar.set_description(f"G: {round(loss_g.item(), 3)} | D: {round(loss_d.item(), 3)}")
         pbar.refresh()
         pbar.update()
 
         if (itr + 1) % int(args.total_iteration / 10) == 0:
+            pbar.set_description(f"G: {round(loss_g.item(), 3)} | D: {round(loss_d.item(), 3)}")
             # evaluation
             generator_score = inception_score(generator, inception_model, args)
 
@@ -195,14 +195,15 @@ def train(generator, discriminator, criterion, optimizer_g, optimizer_d,
             
             # save model
             if generator_score > best_generator_score:
-                save_ckpt(generator, discriminator, score, args)
+                save_ckpt(generator, discriminator, generator_score, args)
             
             generator.eval()
             with torch.no_grad():
                 sample_img = generator(fixed_noise)
             generator.train()
             sample_img = torchvision.utils.make_grid(sample_img.cpu(), normalize=True, nrow=4)
-            wandb.log({f'sample{itr + 1}': wandb.Image(sample_img)})
+            wandb.log({f'samples/iteration{itr + 1}': wandb.Image(sample_img),
+                       'inception score': generator_score})
 
 def save_ckpt(generator, discriminator, score, args):
     generator.cpu()
