@@ -17,24 +17,6 @@ from tqdm import tqdm
 from dataloader import get_dataloader
 
 
-### SET ARGS
-from easydict import EasyDict
-args = EasyDict({
-    'model_name': 'wgan',
-    'dataset_name': 'cifar10',
-    'data_root': '../data/',
-    'resolution': 32,
-    'classes_to_include': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
-    'batch_size': 4,
-    'evaluation_size': 100,
-    'device': 'cpu',
-    'nz': 100,
-    'ngf': 64,
-    'ndf': 64,
-    'nc': 3,
-    'lr':0.0002,
-    'total_iteration': 10
-})
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -115,6 +97,8 @@ def inception_score(generator, inception_model, args):
         noise = torch.randn(bs, args.nz, 1, 1).to(args.device)
         imgs = generator(noise)
         imgs = upsample(imgs)
+        if imgs.size()[1] == 1:    # if output channel is 1 like MNIST
+            imgs = imgs.expand(-1, 3, -1, -1)
         x = inception_model(imgs)
         
         conditional_dist = F.softmax(x, dim=-1)
@@ -221,12 +205,12 @@ def save_ckpt(generator, discriminator, score, args):
     discriminator.to(args.device)
 
 if __name__ == '__main__':
-
-    # init logger
-    wandb.init(project='wgan', config=args)
     
     args = get_args()
     print(args)
+    
+    # init logger
+    wandb.init(project='wgan', config=args)
     model_classes = [m for m in dir(models) 
                        if m.lower() == args.model_name.lower()]
     assert model_classes, f'Model name {args.model_name} does not exist'
